@@ -1,6 +1,9 @@
 name: Isolated ASE verification for PR 8359
 
-on: create
+on:
+  push:
+    branches:
+      - codex/ase-ci-8359-20261121-171100
 
 permissions:
   contents: read
@@ -12,7 +15,7 @@ defaults:
 jobs:
   test:
     name: abacuslite
-    if: github.repository == 'rimujiangshu/abacus-develop' && github.event.ref_type == 'branch' && github.event.ref == 'codex/ase-ci-8359-20261121-171100'
+    if: github.repository == 'rimujiangshu/abacus-develop' && github.ref == 'refs/heads/codex/ase-ci-8359-20261121-171100'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     container:

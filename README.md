@@ -4,7 +4,8 @@ This is a CI-only orphan branch in the personal fork. Do not merge it into any
 source branch. It intentionally contains no ABACUS source and no unrelated
 workflows.
 
-The sole workflow runs once when this named branch is created. It checks out
+The sole workflow runs on pushes to this named branch. One verification run
+is authorized; do not push again to retry automatically. It checks out
 the unchanged source commit `bf34603d1a1487a6de8faf25bde4e3a43c6d404b`, uses the
 original failed CI container digest, and runs the original ASE unit and
 integration scripts with unchanged assertions and inputs.
