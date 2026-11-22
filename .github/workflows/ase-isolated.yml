@@ -1,0 +1,125 @@
+name: Isolated ASE verification for PR 8359
+
+on: create
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: abacuslite
+    if: github.repository == 'rimujiangshu/abacus-develop' && github.event.ref_type == 'branch' && github.event.ref == 'codex/ase-ci-8359-20261121-171100'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/deepmodeling/abacus-gnu@sha256:ee3101aea0e50813e2e408cb857e29ca9ea774da5a9b8c8d65b87cb7dd77799d
+
+    steps:
+      - name: Checkout the unchanged PR source
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: rimujiangshu/abacus-develop
+          ref: bf34603d1a1487a6de8faf25bde4e3a43c6d404b
+          persist-credentials: false
+
+      - name: Record source and runner identity
+        run: |
+          git config --global --add safe.directory "$PWD"
+          test "$(git rev-parse HEAD)" = bf34603d1a1487a6de8faf25bde4e3a43c6d404b
+          mkdir -p "$RUNNER_TEMP/ase-evidence"
+          {
+            date -u
+            git rev-parse HEAD HEAD^{tree}
+            uname -a
+            lscpu
+            sha256sum interfaces/ASE_interface/abacuslite/core.py tests/PP_ORB/Si_ONCV_PBE-1.0.upf tests/PP_ORB/Si_gga_6au_100Ry_2s2p1d.orb
+          } > "$RUNNER_TEMP/ase-evidence/identity.txt"
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v4
+        with:
+          miniconda-version: latest
+          activate-environment: abacuslite
+          python-version: '3.10'
+
+      - name: Install dependencies
+        shell: bash -l {0}
+        run: |
+          conda install -y pip
+          pip install numpy scipy matplotlib
+
+      - name: Install abacuslite
+        shell: bash -l {0}
+        run: |
+          cd interfaces/ASE_interface
+          pip install .
+          python --version > "$RUNNER_TEMP/ase-evidence/python.txt"
+          pip freeze > "$RUNNER_TEMP/ase-evidence/python-freeze.txt"
+
+      - name: Install external tools from toolchain
+        run: |
+          sudo apt update && sudo apt install -y xz-utils ninja-build pkg-config
+          cd toolchain
+          ./install_abacus_toolchain_new.sh --with-dftd4=install --dry-run -j8
+          ./scripts/stage4/install_stage4.sh
+
+      - name: Configure and build ABACUS
+        run: |
+          set -o pipefail
+          source toolchain/install/setup
+          prepend_path CMAKE_PREFIX_PATH ${PEXSI32_ROOT}:${SUPERLU_DIST32_ROOT}:${PARMETIS32_ROOT}:${METIS32_ROOT}:${GKLIB_ROOT}
+          test ! -d build
+          cmake -B build -G Ninja 2>&1 | tee "$RUNNER_TEMP/ase-evidence/configure.log"
+          cmake --build build -j2 2>&1 | tee "$RUNNER_TEMP/ase-evidence/build.log"
+
+      - name: Install and verify ABACUS identity
+        run: |
+          cmake --install build
+          if [ -f /usr/local/bin/abacus_2p ]; then
+            ln -sf /usr/local/bin/abacus_2p /usr/local/bin/abacus
+          fi
+          test "$(readlink -f "$(command -v abacus)")" = /usr/local/bin/abacus_basic_para
+          {
+            command -v abacus
+            readlink -f "$(command -v abacus)"
+            abacus --version
+            sha256sum /usr/local/bin/abacus_basic_para
+            ldd /usr/local/bin/abacus_basic_para
+            dpkg-query -W
+          } > "$RUNNER_TEMP/ase-evidence/binary-and-libraries.txt"
+          cp build/CMakeCache.txt "$RUNNER_TEMP/ase-evidence/"
+
+      - name: Run original unit tests
+        shell: bash -l {0}
+        run: |
+          set -o pipefail
+          cd interfaces/ASE_interface/abacuslite
+          bash ./xtest.sh 2>&1 | tee "$RUNNER_TEMP/ase-evidence/unit-tests.log"
+
+      - name: Run original integration tests
+        shell: bash -l {0}
+        run: |
+          set -o pipefail
+          cd interfaces/ASE_interface/tests
+          bash ./xtest.sh 2>&1 | tee "$RUNNER_TEMP/ase-evidence/integration-tests.log"
+
+      - name: Verify tracked source remains unchanged
+        if: always()
+        run: |
+          git diff --exit-code HEAD -- source interfaces tests cmake CMakeLists.txt
+          git status --porcelain=v1 > "$RUNNER_TEMP/ase-evidence/working-tree-status.txt"
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ase-pr8359-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/ase-evidence/**
+            /tmp/abacus_ase_failure/**
+          if-no-files-found: warn
+          retention-days: 14
