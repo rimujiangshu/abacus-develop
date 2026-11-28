@@ -1,9 +1,9 @@
+#include "lj_test_solver.h"
 #include "source_cell/dom_decomp.h"
+#include "source_md/nhchain.h"
+#include "source_md/unittests/setcell.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "source_md/unittests/setcell.h"
-#include "lj_test_solver.h"
-#include "source_md/nhchain.h"
 #define doublethreshold 1e-12
 /************************************************
  *  unit test of functions in nhchain.h
@@ -32,12 +32,12 @@
 class NHC_test : public testing::Test
 {
   protected:
-    MD_base* mdrun;
+    MD_base *mdrun;
     UnitCell ucell;
     MDCell mdcell;
     DomainDecomposition decomp;
     Input_para inp;
-    ModuleESolver::ESolver* p_esolver;
+    ModuleESolver::ESolver *p_esolver;
     /// the md writers take the directory explicitly, so the test owns it
     const std::string out_dir = "./";
     const std::string readin_dir = "./";
@@ -165,8 +165,8 @@ TEST_F(NHC_test, write_restart)
     getline(ifs, output_str);
     EXPECT_THAT(output_str, testing::HasSubstr("-0.00658882   -0.0304055   -0.0188618   -0.0175663   "));
     getline(ifs, output_str);
-    EXPECT_THAT(output_str,
-                testing::HasSubstr("0.583152   -0.106519   -0.895936   -0.634424   0.627532   -0.473422   "));
+    EXPECT_THAT(
+        output_str, testing::HasSubstr("0.583152   -0.106519   -0.895936   -0.634424   0.627532   -0.473422   "));
     getline(ifs, output_str);
     EXPECT_THAT(output_str, testing::HasSubstr("4"));
     getline(ifs, output_str);
@@ -181,7 +181,7 @@ TEST_F(NHC_test, restart)
     mdrun->restart(readin_dir);
     remove("Restart_md.txt");
 
-    Nose_Hoover* nhc = dynamic_cast<Nose_Hoover*>(mdrun);
+    Nose_Hoover *nhc = dynamic_cast<Nose_Hoover *>(mdrun);
     EXPECT_EQ(mdrun->step_rst_, 3);
     EXPECT_EQ(inp.mdp.md_tchain, 4);
     EXPECT_EQ(inp.mdp.md_pchain, 4);
@@ -218,13 +218,20 @@ TEST_F(NHC_test, print_md)
     std::ifstream ifs("running_nhchain.log");
     std::string output_str;
     getline(ifs, output_str);
+    EXPECT_THAT(output_str, testing::HasSubstr(" MD STEP: 1"));
+    getline(ifs, output_str);
     EXPECT_THAT(output_str, testing::HasSubstr(" ELECTRONIC      PART OF STRESS: 0.24609992 kbar"));
     getline(ifs, output_str);
     EXPECT_THAT(output_str, testing::HasSubstr(" IONIC (KINETIC) PART OF STRESS: 0.83853919 kbar"));
     getline(ifs, output_str);
     EXPECT_THAT(output_str, testing::HasSubstr(" MD PRESSURE (ELECTRONS+IONS)  : 1.0846391 kbar"));
-    getline(ifs, output_str);
-    getline(ifs, output_str);
+    std::string stress_block;
+    while (getline(ifs, output_str) && output_str.find(" ---") == std::string::npos)
+    {
+        stress_block += output_str + "\n";
+    }
+    EXPECT_THAT(stress_block, testing::HasSubstr(" VIRIAL (kbar):"));
+    EXPECT_THAT(stress_block, testing::HasSubstr(" MD TOTAL STRESS (kbar):"));
     EXPECT_THAT(
         output_str,
         testing::HasSubstr(

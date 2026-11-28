@@ -10,7 +10,10 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstdio>
 #include <fstream>
+#include <iterator>
+#include <string>
 #include <vector>
 
 namespace
@@ -96,25 +99,9 @@ class MdBoundaryTest : public testing::Test
         const std::vector<std::string> labels(1, "X");
         const std::vector<double> masses(1, 1.0);
         const std::vector<std::int64_t> counts(1, 4);
-        cell.initialize_from_owned_atoms(
-            lattice,
-            inverse,
-            1.0,
-            1.0,
-            4,
-            owned,
-            labels,
-            masses,
-            counts,
-            0.0,
-            domain);
+        cell.initialize_from_owned_atoms(lattice, inverse, 1.0, 1.0, 4, owned, labels, masses, counts, 0.0, domain);
         cell.set_backing_unitcell(backing);
-        decomposition.init(
-            domain,
-            lattice,
-            1.0,
-            0.0,
-            0.0);
+        decomposition.init(domain, lattice, 1.0, 0.0, 0.0);
         cell.set_neighbor_cutoff(0.05);
         parameters.md_dt = ModuleBase::AU_to_FS;
         parameters.md_tfirst = -1.0;
@@ -170,15 +157,36 @@ class MdBoundaryTest : public testing::Test
     }
 };
 
+TEST_F(MdBoundaryTest, PrintMdStepWithoutStress)
+{
+    const int rank = domain.rank();
+    MD_base integrator(parameters, false, true, rank, cell);
+    integrator.step_ = 2;
+    integrator.step_rst_ = 3;
+    const std::string filename = testing::TempDir() + "md_step_without_stress.log";
+    std::ofstream output;
+    if (rank == 0)
+    {
+        output.open(filename.c_str());
+        EXPECT_TRUE(output.is_open());
+    }
+    integrator.print_md(output, false);
+    if (rank == 0)
+    {
+        output.close();
+        std::ifstream input(filename.c_str());
+        const std::string log((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        EXPECT_NE(log.find("MD STEP: 6"), std::string::npos);
+        EXPECT_NE(log.find("Energy (Ry)"), std::string::npos);
+        EXPECT_EQ(log.find("VIRIAL (kbar)"), std::string::npos);
+        std::remove(filename.c_str());
+    }
+}
+
 TEST_F(MdBoundaryTest, MatchesLegacyWrappingThroughMigrationAndRepeatedSync)
 {
     const int rank = domain.rank();
-    MD_base integrator(
-        parameters,
-        false,
-        true,
-        rank,
-        cell);
+    MD_base integrator(parameters, false, true, rank, cell);
     std::ofstream log;
     for (int step = 0; step < 2; ++step)
     {
@@ -254,12 +262,7 @@ TEST_F(MdBoundaryTest, MatchesLegacyWrappingThroughMigrationAndRepeatedSync)
 TEST_F(MdBoundaryTest, InitialForceEvaluationDoesNotAdvancePositionUpdateState)
 {
     const int rank = domain.rank();
-    MD_base integrator(
-        parameters,
-        false,
-        true,
-        rank,
-        cell);
+    MD_base integrator(parameters, false, true, rank, cell);
     PositionStateSolver solver;
     const std::string readin_directory;
     backing.ionic_position_updated = false;
@@ -279,14 +282,7 @@ TEST_F(MdBoundaryTest, InitialForceEvaluationDoesNotAdvancePositionUpdateState)
     integrator.first_half(log);
     const bool positions_updated = true;
     MD_func::force_virial(
-        &solver,
-        1,
-        positions_updated,
-        cell,
-        decomposition,
-        integrator.potential,
-        false,
-        integrator.virial);
+        &solver, 1, positions_updated, cell, decomposition, integrator.potential, false, integrator.virial);
     ASSERT_EQ(solver.observed_position_updates.size(), 2u);
     EXPECT_TRUE(solver.observed_position_updates[1]);
 }
@@ -294,12 +290,7 @@ TEST_F(MdBoundaryTest, InitialForceEvaluationDoesNotAdvancePositionUpdateState)
 TEST_F(MdBoundaryTest, RestartedSetupDoesNotAdvancePositionUpdateState)
 {
     const int rank = domain.rank();
-    MD_base integrator(
-        parameters,
-        false,
-        true,
-        rank,
-        cell);
+    MD_base integrator(parameters, false, true, rank, cell);
     PositionStateSolver solver;
     const std::string readin_directory;
     // Simulate a restarted run: the global step (step_ + step_rst_) is already
@@ -340,12 +331,7 @@ int main(int argc, char **argv)
     int process_count = 1;
     int thread_count = 1;
     int rank = 0;
-    Parallel_Global::read_pal_param(
-        argc,
-        argv,
-        process_count,
-        thread_count,
-        rank);
+    Parallel_Global::read_pal_param(argc, argv, process_count, thread_count, rank);
     POOL_WORLD = MPI_COMM_NULL;
     KP_WORLD = MPI_COMM_NULL;
     INT_BGROUP = MPI_COMM_NULL;
@@ -362,9 +348,9 @@ int main(int argc, char **argv)
 #endif
 
 #ifndef __MPI
-#include "source_md/md_base.h"
 #include "source_base/constants.h"
 #include "source_base/parallel_cell.h"
+#include "source_md/md_base.h"
 
 #include <gtest/gtest.h>
 
@@ -406,7 +392,7 @@ TEST(MdPositionTest, TinyNegativeDisplacementRemainsInsideHalfOpenCell)
     parameters.md_tfirst = 0.0;
     parameters.md_tlast = 0.0;
     MD_base integrator(parameters, false, true, 0, cell);
-    LocalAtom& moving = cell.owned_atoms()[0];
+    LocalAtom &moving = cell.owned_atoms()[0];
     moving.frac.set(0.0, 0.0, 0.0);
     moving.cart.set(0.0, 0.0, 0.0);
     moving.vel.set(-1.0e-21, -2.0e-21, -3.0e-21);
@@ -436,14 +422,14 @@ TEST(MdPositionTest, FiniteBoundaryCrossingsAndFrozenComponentsKeepTheirPosition
     cell.owned_atoms()[1].vel.set(-0.5, 1.75, -1.25);
     std::ofstream log;
     integrator.first_half(log);
-    const LocalAtom& moving = cell.owned_atoms()[0];
+    const LocalAtom &moving = cell.owned_atoms()[0];
     EXPECT_DOUBLE_EQ(moving.frac.x, 0.75);
     EXPECT_DOUBLE_EQ(moving.frac.y, 0.25);
     EXPECT_DOUBLE_EQ(moving.frac.z, 0.5);
     EXPECT_EQ(moving.boundary_shift.x, 1);
     EXPECT_EQ(moving.boundary_shift.y, -1);
     EXPECT_EQ(moving.boundary_shift.z, 1);
-    const LocalAtom& frozen = cell.owned_atoms()[1];
+    const LocalAtom &frozen = cell.owned_atoms()[1];
     EXPECT_DOUBLE_EQ(frozen.frac.x, 0.25);
     EXPECT_DOUBLE_EQ(frozen.frac.y, 0.5);
     EXPECT_DOUBLE_EQ(frozen.frac.z, 0.75);
@@ -456,7 +442,7 @@ TEST(MdPositionTest, ExactUpperBoundaryIsWrappedAndTheNextStepClearsItsShift)
     parameters.md_tfirst = 0.0;
     parameters.md_tlast = 0.0;
     MD_base integrator(parameters, false, true, 0, cell);
-    LocalAtom& moving = cell.owned_atoms()[0];
+    LocalAtom &moving = cell.owned_atoms()[0];
     moving.vel.set(0.75, 0.0, 0.0);
     std::ofstream log;
     integrator.first_half(log);
@@ -478,7 +464,7 @@ TEST(MdPositionTest, RejectsMovementBeyondTheLegacySingleCellRange)
     parameters.md_tfirst = 0.0;
     parameters.md_tlast = 0.0;
     MD_base integrator(parameters, false, true, 0, cell);
-    LocalAtom& moving = cell.owned_atoms()[0];
+    LocalAtom &moving = cell.owned_atoms()[0];
     std::ofstream log;
     for (const double velocity : {-1.5, 2.0})
     {
