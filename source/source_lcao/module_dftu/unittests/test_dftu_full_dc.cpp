@@ -48,15 +48,20 @@ TEST(DftuFullDc, AnalyticComplexShell)
     const double fll = evaluate_full_dc(n, 2, 2.0, 1.0, v, fll_correction);
     EXPECT_NEAR(fll, 0.27, 1e-14);
     EXPECT_NEAR(fll_correction, 0.83, 1e-14);
-    EXPECT_NEAR(std::abs(v[0] + 0.6), 0.0, 1e-14);
-    EXPECT_NEAR(std::abs(v[3] - 0.4), 0.0, 1e-14);
-    EXPECT_NEAR(std::abs(v[1] - Complex(-0.2, -0.4)), 0.0, 1e-14);
+    const Complex fll_00_residual = v[0] + 0.6;
+    EXPECT_NEAR(std::abs(fll_00_residual), 0.0, 1e-14);
+    const Complex fll_11_residual = v[3] - 0.4;
+    EXPECT_NEAR(std::abs(fll_11_residual), 0.0, 1e-14);
+    const Complex fll_01_residual = v[1] - Complex(-0.2, -0.4);
+    EXPECT_NEAR(std::abs(fll_01_residual), 0.0, 1e-14);
     double amf_correction = 0.0;
     const double amf = evaluate_full_dc(n, 2, 2.0, 0.0, v, amf_correction);
     EXPECT_NEAR(amf, -0.225, 1e-14);
     EXPECT_NEAR(amf_correction, 0.225, 1e-14);
-    EXPECT_NEAR(std::abs(v[0] + 0.5), 0.0, 1e-14);
-    EXPECT_NEAR(std::abs(v[3] - 0.5), 0.0, 1e-14);
+    const Complex amf_00_residual = v[0] + 0.5;
+    EXPECT_NEAR(std::abs(amf_00_residual), 0.0, 1e-14);
+    const Complex amf_11_residual = v[3] - 0.5;
+    EXPECT_NEAR(std::abs(amf_11_residual), 0.0, 1e-14);
     double mixed_correction = 0.0;
     const double mixed = evaluate_full_dc(n, 2, 2.0, 0.5, v, mixed_correction);
     EXPECT_NEAR(mixed, 0.0225, 1e-14);
@@ -137,7 +142,8 @@ TEST(DftuFullDc, EndpointsAndContinuityWithoutBranches)
         EXPECT_NEAR(e_correction, alpha * ef_correction + (1.0 - alpha) * ea_correction, 1e-14);
         for (int i = 0; i < 4; ++i)
         {
-            EXPECT_NEAR(std::abs(v[i] - alpha * vf[i] - (1.0 - alpha) * va[i]), 0.0, 1e-14);
+            const Complex interpolation_residual = v[i] - alpha * vf[i] - (1.0 - alpha) * va[i];
+            EXPECT_NEAR(std::abs(interpolation_residual), 0.0, 1e-14);
         }
     }
 }
@@ -190,7 +196,8 @@ TEST(DftuFullDc, OrbitalPhaseCovariance)
         const double er = evaluate_full_dc(rotated, 2, 2.0, alpha, vr, er_correction);
         EXPECT_NEAR(e, er, 1e-14);
         EXPECT_NEAR(e_correction, er_correction, 1e-14);
-        EXPECT_NEAR(std::abs(vr[1] - phase * v[1]), 0.0, 1e-14);
+        const Complex phase_residual = vr[1] - phase * v[1];
+        EXPECT_NEAR(std::abs(phase_residual), 0.0, 1e-14);
     }
 }
 
@@ -213,7 +220,8 @@ TEST(DftuFullDc, NonmagneticSpinSumHasAnalyticEnergyAndUndoubledPotential)
         EXPECT_NEAR(2.0 * e_correction, 0.45 + 1.21 * alpha, 1e-14);
         EXPECT_NEAR(v[0].real(), -0.5 - 0.1 * alpha, 1e-14);
         EXPECT_NEAR(v[3].real(), 0.5 - 0.1 * alpha, 1e-14);
-        EXPECT_NEAR(std::abs(v[1] - Complex(-0.2, -0.4)), 0.0, 1e-14);
+        const Complex potential_residual = v[1] - Complex(-0.2, -0.4);
+        EXPECT_NEAR(std::abs(potential_residual), 0.0, 1e-14);
         const double band = contraction(v, spin_sum, 2);
         EXPECT_NEAR(2.0 * e - band, 2.0 * e_correction, 1e-14);
     }
@@ -274,7 +282,8 @@ TEST(DftuFullDc, PolarizedShellsUseSeparateSpinAverages)
         EXPECT_NEAR(vu[0].real(), -0.5 - 0.1 * alpha, 1e-14);
         EXPECT_NEAR(vd[0].real(), -0.1 + 0.7 * alpha, 1e-14);
         EXPECT_NEAR(vd[3].real(), 0.1 + 0.7 * alpha, 1e-14);
-        EXPECT_NEAR(std::abs(vd[1] - Complex(-0.06, 0.08)), 0.0, 1e-14);
+        const Complex down_potential_residual = vd[1] - Complex(-0.06, 0.08);
+        EXPECT_NEAR(std::abs(down_potential_residual), 0.0, 1e-14);
     }
 }
 

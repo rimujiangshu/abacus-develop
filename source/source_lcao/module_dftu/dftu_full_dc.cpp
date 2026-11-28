@@ -38,7 +38,8 @@ double evaluate_full_dc(const std::vector<T>& occupation,
             {
                 throw std::invalid_argument("Full DFT+U requires a finite Hermitian occupation matrix");
             }
-            square_trace += std::real(nij * nji);
+            const T occupation_product = nij * nji;
+            square_trace += std::real(occupation_product);
         }
     }
 
